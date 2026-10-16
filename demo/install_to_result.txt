@@ -1,0 +1,36 @@
+$ python3 -m venv .venv
+$ .venv/bin/pip install httpeek        # 真实安装（零依赖）
+
+[notice] A new release of pip is available: 25.1.1 -> 26.2.1
+[notice] To update, run: /private/var/folders/bz/5s2qfbtn0g7d8strdks78w7w0000gn/T/tmp.l4xnbxLU7j/.venv/bin/python3.13 -m pip install --upgrade pip
+
+$ httpeek version
+httpeek 0.1.0
+
+$ httpeek init demo.json                # 生成示例集合
+✓ 已生成示例集合：demo.json
+下一步：httpeek run demo.json 或 httpeek mock demo.json
+
+$ httpeek mock demo.json --port 8099 &  # 把同一份文件变成 Mock 服务
+$ httpeek get http://127.0.0.1:8099/hello
+→ 200 OK (32 ms) http://127.0.0.1:8099/hello
+  Content-Type: application/json
+  Content-Length: 72
+
+{
+  "message": "你好，这是 httpeek 的本地 Mock 响应",
+  "ok": true
+}
+
+$ httpeek get http://127.0.0.1:8099/users/42?v=9   # 路径参数 + 响应模板
+→ 200 OK (27 ms) http://127.0.0.1:8099/users/42?v=9
+  Content-Type: application/json
+  Content-Length: 43
+
+{
+  "id": "42",
+  "from": "/users/42",
+  "q": "9"
+}
+
+✓ 演示完成（mock 已停止）

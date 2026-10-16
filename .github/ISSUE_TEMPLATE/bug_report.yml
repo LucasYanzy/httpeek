@@ -1,0 +1,42 @@
+name: Bug report
+description: 报告一个 httpeek 的缺陷
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么？
+      description: 清晰描述问题现象。
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 给出可复现的命令与参数（可脱敏 URL/Token）。
+      placeholder: |
+        1. httpeek get https://...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: httpeek 版本
+      placeholder: "0.1.0（或 `httpeek version` 输出）"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python 版本与系统
+      placeholder: "3.13 / macOS"
+    validations:
+      required: false

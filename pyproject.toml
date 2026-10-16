@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "httpeek"
+version = "0.1.0"
+description = "终端 HTTP 客户端 + 内置 Mock 服务：零依赖、零账号、可离线"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "httpeek contributors" }]
+keywords = ["http", "client", "cli", "mock", "api", "curl", "httpie", "testing", "devtools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/httpeek/httpeek"
+Repository = "https://github.com/httpeek/httpeek"
+Documentation = "https://github.com/httpeek/httpeek#readme"
+Changelog = "https://github.com/httpeek/httpeek/releases"
+
+[project.scripts]
+httpeek = "httpeek.cli:main"
+
+[tool.setuptools]
+packages = ["httpeek"]
