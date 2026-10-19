@@ -2,6 +2,19 @@
 
 本项目遵循语义化版本。所有版本均为**零第三方依赖**。
 
+## [未发布]
+
+### 新增
+- **`httpeek history`**：请求历史记录 + 回放。
+  - 每次请求后把 `method / url / headers / body` 追加到本地
+    `~/.httpeek/history.jsonl`（每行一条 JSON，可用环境变量 `HTTPEEK_HOME` 改目录）；
+    目录/文件不存在时自动创建，**只写本地、绝不上传**。
+  - `httpeek history` 列出最近 N 条（`-n/--limit`，默认 20，带序号与时间戳）；
+    `httpeek history <编号>` 重放该条请求。
+  - `--no-history` 关闭某次请求的记录；历史文件损坏（坏行/半截 JSON）时安全跳过、不崩溃。
+  - 新增 `tests/test_history.py`（16 个用例，覆盖追加写入、列表、重放、`--no-history`、
+    损坏文件与目录创建）；`test_cli.py` 增加 `HTTPEEK_HOME` 隔离，避免测试写入用户真实目录。
+
 ## [0.2.0] — 2026-10-19
 
 ### 新增

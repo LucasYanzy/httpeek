@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import shutil
 import tempfile
 import threading
 import unittest
@@ -40,6 +41,19 @@ class TestCli(unittest.TestCase):
     def tearDownClass(cls):
         cls.srv.shutdown()
         cls.srv.server_close()
+
+    def setUp(self):
+        # 隔离请求历史，避免测试写入用户真实的 ~/.httpeek。
+        self._home = tempfile.mkdtemp()
+        self._old_home = os.environ.get("HTTPEEK_HOME")
+        os.environ["HTTPEEK_HOME"] = self._home
+
+    def tearDown(self):
+        if self._old_home is None:
+            os.environ.pop("HTTPEEK_HOME", None)
+        else:
+            os.environ["HTTPEEK_HOME"] = self._old_home
+        shutil.rmtree(self._home, ignore_errors=True)
 
     def _run(self, args):
         buf = io.StringIO()

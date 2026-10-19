@@ -44,6 +44,7 @@ $ httpeek get http://127.0.0.1:8080/hello
 | 一条命令、零配置 | ✅ | ⚠️ 需装 | ❌ 需账号 | ✅ 但不美观 |
 | 零第三方依赖 / 免 `pip install` | ✅ | ❌ | ❌ | ✅ |
 | 持久化请求集合（纯文件、可 Git） | ✅ | ⚠️ | ✅ | ❌ |
+| **请求历史记录 + 回放（本地、不上传）** | ✅ | ❌ | ✅ | ❌ |
 | **同一文件 = 本地 Mock 服务** | ✅ | ❌ | ⚠️ | ❌ |
 | 离线可用 | ✅ | ✅ | ❌ | ✅ |
 | 可选本地 AI 生成请求（Ollama） | ✅ | ❌ | ❌ | ❌ |
@@ -81,7 +82,8 @@ httpeek get https://httpbin.org/get -r 5               # 重复 5 次，打印�
 常用选项：`-H/--header K:V`、`-d/--data JSON或文本`、`-q/--query k=v`、`--bearer`、
 `-t/--timeout 秒`、`-o/--output 文件`、`--json`（管道友好）、`--insecure`、`--no-color`、
 `-v/--verbose`（打印请求行/请求头）、`--only-headers`、`--only-body`、`--quiet`、`-r/--repeat N`、
-`-F/--form K=V`（multipart 表单，`K=@文件` 上传文件）、`--save 文件`（把这次请求存回集合）。
+`-F/--form K=V`（multipart 表单，`K=@文件` 上传文件）、`--save 文件`（把这次请求存回集合）、
+`--no-history`（这一次请求不记入本地历史）。
 
 ### 运行请求集合
 
@@ -106,6 +108,30 @@ httpeek post https://httpbin.org/post -F "name=a" -F "f=@./a.txt"
 
 这样"随手发一个请求 → 存成集合 → 以后 `run` 或 `mock`"就闭环了；
 老的 curl 命令也能一键迁移进来。
+
+### 请求历史（记录 + 回放）
+
+每次发送请求后，httpeek 会把 `method / url / headers / body` 追加到本机文件
+`~/.httpeek/history.jsonl`（每行一条 JSON）。**纯本地、绝不上传**；目录不存在会自动创建，
+可用环境变量 `HTTPEEK_HOME` 更换位置。
+
+```bash
+# 列出最近 20 条（带序号与时间戳）
+httpeek history
+
+# 只看最近 5 条
+httpeek history -n 5          # 或 httpeek history --limit 5
+
+# 重放第 3 条历史请求（序号见列表最左侧的 #N）
+httpeek history 3
+
+# 这一次请求不写入历史
+httpeek get https://api.github.com/zen --no-history
+```
+
+- 列表每行格式：`#序号  时间戳  METHOD  URL`。
+- 历史文件损坏（含坏行 / 半截 JSON）时**不会崩溃**，坏行会被安静跳过。
+- 数据只留在本机，httpeek 不会把它发送到任何地方。
 
 ### 把集合变成本地 Mock 服务
 
@@ -172,6 +198,8 @@ httpeek ai "获取北京今天的天气" --model qwen2.5:latest --run
 
 **Q：AI 功能要付费吗？** 不。它只调用**本机**的 Ollama（`localhost:11434`）。没有 Ollama 时该命令会提示，不报错中断。
 
+**Q：请求历史会上传吗？** 不会。它只写在 `~/.httpeek/history.jsonl`（可用 `HTTPEEK_HOME` 改目录），是纯本地文件；发送时加 `--no-history` 即可不记录。
+
 ---
 
 ## 🗺 路线图
@@ -183,10 +211,11 @@ httpeek ai "获取北京今天的天气" --model qwen2.5:latest --run
 - [x] `--repeat N` 与耗时统计
 - [x] Mock 路径参数 / 响应模板 / 查询规则 / 延迟模拟
 - [x] `--save` 把请求存回集合、`import` 从 curl 导入、`-F` multipart 表单与文件上传
+- [x] 请求历史 `history`（记录 + 回放，本地 JSONL，`--no-history` 可关闭）
 
 **待做 🚧**
 - [ ] 从 OpenAPI 自动生成 `mocks`
-- [ ] 响应差异对比（diff）与请求历史记录
+- [ ] 响应差异对比（diff）
 - [ ] 终端演示动图（见 good first issue）
 
 欢迎在 Issue 里提建议，或认领 **good first issue**。
