@@ -4,12 +4,13 @@
 > （httpeek 的零依赖铁律）。可参考 `CONTRIBUTING.md`。
 >
 > **已实现、勿重复认领**：`${ENV}` 展开、`expect` 断言、`--repeat` 统计、
-> 彩色/可配置输出、Mock 路径参数与模板、`--save`、`import "curl ..."`、`-F` 表单上传。
-> 这些已在 v0.1.0 / v0.2.0 中完成（对应 issue 已关闭）。
+> 彩色/可配置输出、Mock 路径参数与模板、`--save`、`import "curl ..."`、`-F` 表单上传、
+> `history` 请求历史（记录 + 回放）。
+> 这些已在 v0.1.0 / v0.2.0 及后续版本中完成（对应 issue 已关闭）。
 
 ---
 
-## 1. [Feature] 请求历史 `httpeek history`（记录 + 回放）
+## 1. [Feature] 请求历史 `httpeek history`（记录 + 回放）——✅ 已实现
 
 **背景**：终端里刚发过的请求想再跑一次，只能翻 shell 历史；希望 httpeek 自己记住。
 
@@ -18,9 +19,8 @@
 - `httpeek history` 列出最近 N 条（带序号与时间）；`httpeek history 3` 重放第 3 条。
 - 加 `--no-history` 或配置项可关闭；默认开启但绝不上传任何数据。
 
-**提示**：在 `cli.py` 的 method 分支里，发送成功后写一行 JSON；注意文件不存在时创建目录。
-
-**标签**：`good first issue`, `enhancement`
+**实现**：新增 `httpeek/history.py`，`cli.py` 增加 `history` 子命令与 `--no-history`；
+测试见 `tests/test_history.py`。
 
 ---
 

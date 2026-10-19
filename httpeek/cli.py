@@ -1,4 +1,4 @@
-"""httpeek 命令行入口：方法即命令，子命令 run/mock/init/ai。"""
+"""httpeek 命令行入口：方法即命令，子命令 run/mock/init/ai/history。"""
 
 import json
 import os
@@ -8,6 +8,11 @@ from . import __version__
 from .ai import generate_request, AiUnavailable, DEFAULT_MODEL, OLLAMA_URL
 from .client import send_request, build_multipart
 from .collection import load_collection, run_collection
+from .errors import HttpPeekError
+from .history import (
+    DEFAULT_LIMIT, record as record_history, recent as recent_history,
+    get_entry, entry_to_request, history_path,
+)
 from .importer import parse_curl
 from .mock_server import make_server
 from .pretty import (
@@ -46,7 +51,7 @@ def _parse_opts(args):
             "timeout": 10, "insecure": False, "output": None, "json_out": False,
             "verbose": False, "quiet": False, "only_headers": False,
             "only_body": False, "repeat": 1, "save": None, "form": [],
-            "_req_headers": {}}
+            "no_history": False, "_req_headers": {}}
     i = 0
     while i < len(args):
         a = args[i]
@@ -54,6 +59,8 @@ def _parse_opts(args):
             os.environ["NO_COLOR"] = "1"
         elif a == "--insecure":
             opts["insecure"] = True
+        elif a == "--no-history":
+            opts["no_history"] = True
         elif a == "--json":
             opts["json_out"] = True
         elif a in ("-t", "--timeout"):
@@ -144,6 +151,80 @@ def _print_response(res):
     _emit(res, {})
 
 
+def _history_help():
+    return (
+        "httpeek history — 查看与重放本机请求历史\n\n"
+        "用法:\n"
+        "  httpeek history [-n N]        列出最近 N 条请求（默认 " + str(DEFAULT_LIMIT) + "）\n"
+        "  httpeek history <编号>        重放编号对应的请求（编号见列表最左侧）\n\n"
+        "选项:\n"
+        "  -n, --limit N    显示的条目数\n"
+        "  --no-history     重放时不写入历史\n"
+        "  -h, --help       显示本帮助\n\n"
+        "历史保存在 " + history_path() + "（每行一条 JSON）。\n"
+        "用环境变量 HTTPEEK_HOME 可更换目录；发送请求时默认记录，\n"
+        "给请求加 --no-history 则不记录。数据只留在本机，绝不上传。"
+    )
+
+
+def _cmd_history(args):
+    """`httpeek history` 子命令：列出最近记录，或按编号重放。"""
+    limit = DEFAULT_LIMIT
+    target = None
+    no_history = False
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-h", "--help"):
+            print(_history_help())
+            return 0
+        if a in ("-n", "--limit"):
+            if i + 1 >= len(args):
+                print(red("✗"), "缺少数量，例如：httpeek history -n 10")
+                return 2
+            try:
+                limit = int(args[i + 1])
+            except ValueError:
+                print(red("✗"), "数量需要是整数，例如：httpeek history -n 10")
+                return 2
+            i += 1
+        elif a == "--no-history":
+            no_history = True
+        elif target is None and not a.startswith("-"):
+            target = a
+        i += 1
+
+    if target is not None:
+        try:
+            entry = get_entry(target)
+        except HttpPeekError as e:
+            print(red("✗"), str(e))
+            return 1
+        req = entry_to_request(entry)
+        print(dim(f"↻ 重放 #{int(target)} {req['method']} {req['url']}"))
+        try:
+            res = send_request(req["method"], req["url"],
+                               headers=req["headers"], data=req["body"])
+        except Exception as e:
+            print(red("✗"), str(e))
+            return 1
+        if not no_history:
+            record_history(res["method"], res["url"],
+                           headers=req["headers"], body=req["body"])
+        _print_response(res)
+        return 0
+
+    entries = recent_history(limit)
+    if not entries:
+        print(dim("（还没有历史记录。发送一次请求后即可在此看到。）"))
+        return 0
+    for serial, e in entries:
+        print(cyan(f"#{serial}"), gray(str(e.get("timestamp", ""))),
+              bold(str(e.get("method", "?"))), str(e.get("url", "")))
+    print(dim(f"共 {len(entries)} 条（最近 {limit}）。重放：httpeek history <编号>"))
+    return 0
+
+
 def _to_entry(method, url, opts):
     """把一次请求转成集合条目，返回 (base_url, entry)。"""
     from urllib.parse import parse_qsl, urlparse
@@ -192,6 +273,7 @@ def _print_help():
   httpeek init [file.json]          生成一份示例集合
   httpeek import "<curl命令>" [--save f]  解析 curl 命令为请求/集合条目
   httpeek ai "<自然语言>" [--run]   用本机 Ollama 生成请求（可选直接发送）
+  httpeek history [-n N]            查看最近 N 条请求历史（httpeek history <编号> 重放）
   httpeek version                   查看版本
 
 请求选项:
@@ -208,6 +290,7 @@ def _print_help():
   --only-body            只打印响应体
   --quiet                静默（只返回退出码，便于脚本）
   -r, --repeat N         重复发送 N 次并打印耗时统计
+  --no-history           不把这次请求记入本地历史（~/.httpeek/history.jsonl）
   --json                 以 JSON 输出结果（便于管道处理）
   --insecure             跳过 TLS 证书校验
   --no-color             关闭彩色
@@ -233,6 +316,9 @@ def _print_help():
   httpeek get http://127.0.0.1:8080/users/42     # 路径参数 + 模板
   httpeek run demo.json --strict                  # 带断言的冒烟测试
   httpeek ai "获取北京天气" --model qwen2.5:latest --run
+  httpeek history                                # 看最近 20 条历史
+  httpeek history -n 5                           # 看最近 5 条
+  httpeek history 3                              # 重放第 3 条历史请求
 
 零依赖、零账号、可离线（mock 模式）。详见 README。""".replace("__VERSION__", __version__))
 
@@ -281,6 +367,11 @@ def main(argv=None):
         except Exception as e:
             print(red("✗"), str(e))
             return 1
+        # 请求成功后记入本地历史（--no-history 可关闭）。绝不联网，写失败也不影响请求。
+        if not opts["no_history"]:
+            record_history(method, last["url"],
+                           headers=opts.get("_req_headers", {}),
+                           body=opts.get("data"))
         if opts.get("save"):
             base_url, entry = _to_entry(method, last["url"], opts)
             _save_to(opts["save"], base_url, entry)
@@ -418,6 +509,9 @@ def main(argv=None):
             except Exception as e:
                 print(red("✗"), str(e)); return 1
         return 0
+
+    if head == "history":
+        return _cmd_history(argv[1:])
 
     print(red(f"未知命令：{argv[0]}"))
     _print_help()
