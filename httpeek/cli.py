@@ -6,8 +6,9 @@ import sys
 
 from . import __version__
 from .ai import generate_request, AiUnavailable, DEFAULT_MODEL, OLLAMA_URL
-from .client import send_request
+from .client import send_request, build_multipart
 from .collection import load_collection, run_collection
+from .importer import parse_curl
 from .mock_server import make_server
 from .pretty import (
     bold, red, green, cyan, dim, gray, status_color, format_body,
@@ -44,7 +45,8 @@ def _parse_opts(args):
     opts = {"headers": {}, "data": None, "query": {}, "bearer": None,
             "timeout": 10, "insecure": False, "output": None, "json_out": False,
             "verbose": False, "quiet": False, "only_headers": False,
-            "only_body": False, "repeat": 1, "_req_headers": {}}
+            "only_body": False, "repeat": 1, "save": None, "form": [],
+            "_req_headers": {}}
     i = 0
     while i < len(args):
         a = args[i]
@@ -80,6 +82,13 @@ def _parse_opts(args):
                     opts["data"] = val
             else:
                 opts["data"] = val
+        elif a in ("-F", "--form"):
+            kv = args[i + 1]; i += 1
+            if "=" in kv:
+                k, _, v = kv.partition("=")
+                opts["form"].append((k.strip(), v.strip()))
+        elif a == "--save":
+            opts["save"] = args[i + 1]; i += 1
         elif a in ("-v", "--verbose"):
             opts["verbose"] = True
         elif a == "--only-headers":
@@ -135,6 +144,44 @@ def _print_response(res):
     _emit(res, {})
 
 
+def _to_entry(method, url, opts):
+    """把一次请求转成集合条目，返回 (base_url, entry)。"""
+    from urllib.parse import parse_qsl, urlparse
+    p = urlparse(url if "://" in url else "https://" + url)
+    base_url = f"{p.scheme}://{p.netloc}"
+    q = dict(parse_qsl(p.query))
+    q.update(opts.get("query", {}))
+    entry = {"name": f"{method} {p.path or '/'}", "method": method, "path": p.path or "/"}
+    if q:
+        entry["query"] = q
+    headers = dict(opts.get("headers", {}))
+    if opts.get("bearer"):
+        headers["Authorization"] = f"Bearer {opts['bearer']}"
+    if headers:
+        entry["headers"] = headers
+    body = opts.get("data")
+    # multipart 等二进制 body 不便入 JSON，跳过
+    if isinstance(body, (dict, list, str)):
+        entry["body"] = body
+    return base_url, entry
+
+
+def _save_to(path, base_url, entry):
+    """把条目追加写入集合文件（不存在则创建）。"""
+    col = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                col = json.load(f)
+        except Exception:
+            col = {}
+    col.setdefault("base_url", base_url)
+    col.setdefault("requests", [])
+    col["requests"].append(entry)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(col, f, ensure_ascii=False, indent=2)
+
+
 def _print_help():
     print("""httpeek __VERSION__ — 终端 HTTP 客户端 + 内置 Mock（零依赖）
 
@@ -143,6 +190,7 @@ def _print_help():
   httpeek run <file.json>           按顺序执行集合里的请求
   httpeek mock <file.json>          把集合里的 mocks 当作本地 Mock 服务
   httpeek init [file.json]          生成一份示例集合
+  httpeek import "<curl命令>" [--save f]  解析 curl 命令为请求/集合条目
   httpeek ai "<自然语言>" [--run]   用本机 Ollama 生成请求（可选直接发送）
   httpeek version                   查看版本
 
@@ -150,6 +198,8 @@ def _print_help():
   -H, --header K:V       请求头，可重复（如 -H "Authorization: Bearer x"）
   -d, --data JSON/文本    请求体；以 { } 或 [ ] 开头按 JSON 解析
   -q, --query k=v        查询参数，可重复
+  -F, --form K=V         multipart 表单字段，可重复；K=@文件 上传文件
+  --save 文件            把这次请求追加进集合文件（不存在则创建）
   --bearer TOKEN         Authorization: Bearer
   -t, --timeout 秒       超时（默认 10）
   -o, --output 文件      把响应体写入文件
@@ -175,6 +225,9 @@ def _print_help():
   httpeek post https://httpbin.org/post -d '{"name":"httpeek"}' -H "X-Token: 1"
   httpeek get https://api.github.com/zen -v --only-body
   httpeek get https://httpbin.org/get -r 5
+  httpeek get https://api.github.com/zen --save my.json
+  httpeek import 'curl -X POST https://httpbin.org/post -d hello' --save my.json
+  httpeek post https://httpbin.org/post -F "name=a" -F "f=@./a.txt"
   httpeek init demo.json && httpeek mock demo.json
   httpeek get http://127.0.0.1:8080/hello        # 配合上面的 mock
   httpeek get http://127.0.0.1:8080/users/42     # 路径参数 + 模板
@@ -202,6 +255,14 @@ def main(argv=None):
         method = head.upper()
         url = argv[1]
         opts = _parse_opts(argv[2:])
+        if opts["form"]:
+            try:
+                body, ctype = build_multipart(opts["form"])
+            except OSError as e:
+                print(red("✗"), f"读取表单文件失败：{e}")
+                return 1
+            opts["data"] = body
+            opts["headers"]["Content-Type"] = ctype
         req_headers = dict(opts["headers"])
         if opts["bearer"]:
             req_headers["Authorization"] = f"Bearer {opts['bearer']}"
@@ -220,6 +281,11 @@ def main(argv=None):
         except Exception as e:
             print(red("✗"), str(e))
             return 1
+        if opts.get("save"):
+            base_url, entry = _to_entry(method, last["url"], opts)
+            _save_to(opts["save"], base_url, entry)
+            if not opts["quiet"]:
+                print(green("✓ ") + f"已保存到 {opts['save']}")
         if opts["json_out"]:
             out = {
                 "status": last["status"], "headers": last["headers"],
@@ -294,6 +360,30 @@ def main(argv=None):
             json.dump(SAMPLE_COLLECTION, f, ensure_ascii=False, indent=2)
         print(green("✓"), f"已生成示例集合：{path}")
         print(dim(f"下一步：httpeek run {path} 或 httpeek mock {path}"))
+        return 0
+
+    if head == "import":
+        if len(argv) < 2:
+            print(red("缺少 curl 命令，例如：httpeek import 'curl -X POST https://httpbin.org/post -d hello'"))
+            return 2
+        save = None
+        rest = argv[2:]
+        i = 0
+        while i < len(rest):
+            if rest[i] == "--save" and i + 1 < len(rest):
+                save = rest[i + 1]; i += 1
+            i += 1
+        try:
+            entry, base_url, warnings = parse_curl(argv[1])
+        except Exception as e:
+            print(red("✗"), str(e)); return 1
+        print(bold("解析结果："))
+        print(json.dumps(entry, ensure_ascii=False, indent=2))
+        for w in warnings:
+            print(dim("! ") + w)
+        if save:
+            _save_to(save, base_url, entry)
+            print(green("✓ ") + f"已保存到 {save}")
         return 0
 
     if head == "ai":

@@ -102,6 +102,53 @@ class TestCli(unittest.TestCase):
         rc, _ = self._run(["run", p, "--strict"])
         self.assertEqual(rc, 0)
 
+    def test_save_to_collection(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "c.json")
+        rc, out = self._run(["get", _local_url(self.port, "/sv"), "--save", p])
+        self.assertEqual(rc, 0)
+        self.assertIn("已保存", out)
+        with open(p, encoding="utf-8") as f:
+            col = json.load(f)
+        self.assertEqual(col["requests"][0]["path"], "/sv")
+        self.assertTrue(col["base_url"].startswith("http://127.0.0.1"))
+        # 再存一条，应追加而非覆盖
+        self._run(["get", _local_url(self.port, "/sv2"), "--save", p])
+        with open(p, encoding="utf-8") as f:
+            col2 = json.load(f)
+        self.assertEqual(len(col2["requests"]), 2)
+
+    def test_import_command(self):
+        rc, out = self._run(["import", "curl -X POST https://httpbin.org/post -d hello"])
+        self.assertEqual(rc, 0)
+        self.assertIn("POST", out)
+        self.assertIn("/post", out)
+
+    def test_import_with_save(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "c.json")
+        rc, _ = self._run(["import", "curl -X POST https://httpbin.org/post -d hello",
+                           "--save", p])
+        self.assertEqual(rc, 0)
+        with open(p, encoding="utf-8") as f:
+            col = json.load(f)
+        self.assertEqual(col["requests"][0]["method"], "POST")
+
+    def test_multipart_builder(self):
+        from httpeek.client import build_multipart
+        d = tempfile.mkdtemp()
+        fp = os.path.join(d, "a.txt")
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write("hello-file")
+        body, ctype = build_multipart([("name", "a"), ("f", "@" + fp)])
+        self.assertIn("multipart/form-data; boundary=", ctype)
+        boundary = ctype.split("boundary=")[1]
+        txt = body.decode("utf-8", errors="replace")
+        self.assertIn('name="name"', txt)
+        self.assertIn('filename="a.txt"', txt)
+        self.assertIn("hello-file", txt)
+        self.assertIn(boundary, txt)
+
 
 if __name__ == "__main__":
     unittest.main()

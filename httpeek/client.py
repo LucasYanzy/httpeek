@@ -1,13 +1,41 @@
 """HTTP 请求发送（仅标准库）。"""
 
 import json
+import os
 import ssl
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 from .errors import HttpPeekError
+
+
+def build_multipart(fields):
+    """把 [(name, value), ...] 构造成 multipart/form-data。
+
+    value 以 '@' 开头表示文件上传（@./a.txt）。
+    返回 (body_bytes, content_type)。
+    """
+    boundary = "----httpeek" + uuid.uuid4().hex
+    parts = []
+    for name, value in fields:
+        if value.startswith("@"):
+            path = value[1:]
+            with open(path, "rb") as f:
+                content = f.read()
+            filename = os.path.basename(path)
+            head = (f'--{boundary}\r\n'
+                    f'Content-Disposition: form-data; name="{name}"; '
+                    f'filename="{filename}"\r\n'
+                    f'Content-Type: application/octet-stream\r\n\r\n')
+            parts.append(head.encode("utf-8") + content + b"\r\n")
+        else:
+            head = f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'
+            parts.append(head.encode("utf-8") + value.encode("utf-8") + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
 def _build_url(url: str, query):

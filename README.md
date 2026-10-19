@@ -80,7 +80,8 @@ httpeek get https://httpbin.org/get -r 5               # 重复 5 次，打印�
 
 常用选项：`-H/--header K:V`、`-d/--data JSON或文本`、`-q/--query k=v`、`--bearer`、
 `-t/--timeout 秒`、`-o/--output 文件`、`--json`（管道友好）、`--insecure`、`--no-color`、
-`-v/--verbose`（打印请求行/请求头）、`--only-headers`、`--only-body`、`--quiet`、`-r/--repeat N`。
+`-v/--verbose`（打印请求行/请求头）、`--only-headers`、`--only-body`、`--quiet`、`-r/--repeat N`、
+`-F/--form K=V`（multipart 表单，`K=@文件` 上传文件）、`--save 文件`（把这次请求存回集合）。
 
 ### 运行请求集合
 
@@ -88,6 +89,23 @@ httpeek get https://httpbin.org/get -r 5               # 重复 5 次，打印�
 httpeek init demo.json       # 生成示例集合
 httpeek run  demo.json       # 按顺序发送里面的请求
 ```
+
+### 存回集合 & 从 curl 导入 & 表单上传
+
+```bash
+# 发一次请求并把它存进集合（文件不存在则创建，存在则追加）
+httpeek get https://api.github.com/zen --save my.json
+
+# 把已有的 curl 命令解析成 httpeek 请求条目
+httpeek import 'curl -X POST https://x.com/a -H "X-T: 1" -d hello'
+httpeek import 'curl -X POST https://x.com/a -d hello' --save my.json
+
+# multipart 表单 / 文件上传
+httpeek post https://httpbin.org/post -F "name=a" -F "f=@./a.txt"
+```
+
+这样"随手发一个请求 → 存成集合 → 以后 `run` 或 `mock`"就闭环了；
+老的 curl 命令也能一键迁移进来。
 
 ### 把集合变成本地 Mock 服务
 
@@ -164,10 +182,10 @@ httpeek ai "获取北京今天的天气" --model qwen2.5:latest --run
 - [x] 彩色、可配置输出（`-v` / `--only-headers` / `--only-body` / `--quiet`）
 - [x] `--repeat N` 与耗时统计
 - [x] Mock 路径参数 / 响应模板 / 查询规则 / 延迟模拟
+- [x] `--save` 把请求存回集合、`import` 从 curl 导入、`-F` multipart 表单与文件上传
 
 **待做 🚧**
 - [ ] 从 OpenAPI 自动生成 `mocks`
-- [ ] `--save` 把请求存回集合、`-F` 表单上传、`import` 从 curl 导入
 - [ ] 响应差异对比（diff）与请求历史记录
 - [ ] 终端演示动图（见 good first issue）
 
