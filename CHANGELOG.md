@@ -2,6 +2,18 @@
 
 本项目遵循语义化版本。所有版本均为**零第三方依赖**。
 
+## [0.3.0] — 2026-10-22
+
+### 新增
+- **`httpeek history`** — 本地请求历史：默认自动记录每次请求；
+  `httpeek history` 列表、`httpeek history <序号>` 重放、`--clear` 清空。
+  可用 `HTTPEEK_HOME` 改目录、`--no-history` 关闭；数据只写本机
+  `~/.httpeek/history.jsonl`，绝不上传。
+- **`--to-curl`** — 把当前请求或整个集合导出成等价的 curl 命令（不实际发送），
+  与 `import` 互为反向。
+- **Cookie / 会话保持** — `--save-cookies <file>` 保存响应 `Set-Cookie`，
+  `--cookies <file>` 按域名自动带上；集合支持 `"cookies": "jar.json"` 让整个集合共享会话。
+
 ## [0.2.0] — 2026-10-19
 
 ### 新增

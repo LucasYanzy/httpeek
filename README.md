@@ -81,7 +81,8 @@ httpeek get https://httpbin.org/get -r 5               # 重复 5 次，打印�
 常用选项：`-H/--header K:V`、`-d/--data JSON或文本`、`-q/--query k=v`、`--bearer`、
 `-t/--timeout 秒`、`-o/--output 文件`、`--json`（管道友好）、`--insecure`、`--no-color`、
 `-v/--verbose`（打印请求行/请求头）、`--only-headers`、`--only-body`、`--quiet`、`-r/--repeat N`、
-`-F/--form K=V`（multipart 表单，`K=@文件` 上传文件）、`--save 文件`（把这次请求存回集合）。
+`-F/--form K=V`（multipart 表单，`K=@文件` 上传文件）、`--save 文件`（把这次请求存回集合）、
+`--to-curl`（导出等价 curl 但不发送）、`--cookies/--save-cookies 文件`（Cookie 会话）、`--no-history`。
 
 ### 运行请求集合
 
@@ -106,6 +107,25 @@ httpeek post https://httpbin.org/post -F "name=a" -F "f=@./a.txt"
 
 这样"随手发一个请求 → 存成集合 → 以后 `run` 或 `mock`"就闭环了；
 老的 curl 命令也能一键迁移进来。
+
+### 请求历史 / 导出 curl / Cookie 会话
+
+```bash
+httpeek history                        # 列出本地请求历史（默认自动记录每次请求）
+httpeek history 2                      # 重放第 2 条
+httpeek history --clear                # 清空
+
+httpeek get https://api.github.com/zen --to-curl    # 导出等价 curl 命令，不发送
+httpeek run c.json --to-curl                        # 把整个集合导出成 curl
+
+httpeek post https://x.com/login -d '{"u":"a"}' --save-cookies jar.json
+httpeek get  https://x.com/me --cookies jar.json     # 自动带上 cookie
+```
+
+- 历史默认写在 `~/.httpeek/history.jsonl`，可用 `HTTPEEK_HOME` 改目录、`--no-history` 关闭；
+  **只落在本机，绝不上传任何数据**。
+- Cookie 用 JSON 文件保存，按域名匹配自动带上；集合里也可写 `"cookies": "jar.json"`
+  让整个集合共享会话（登录态跨请求保持）。
 
 ### 把集合变成本地 Mock 服务
 
@@ -183,10 +203,11 @@ httpeek ai "获取北京今天的天气" --model qwen2.5:latest --run
 - [x] `--repeat N` 与耗时统计
 - [x] Mock 路径参数 / 响应模板 / 查询规则 / 延迟模拟
 - [x] `--save` 把请求存回集合、`import` 从 curl 导入、`-F` multipart 表单与文件上传
+- [x] `--to-curl` 导出 curl、`history` 本地历史与重放、Cookie 会话保持
 
 **待做 🚧**
 - [ ] 从 OpenAPI 自动生成 `mocks`
-- [ ] 响应差异对比（diff）与请求历史记录
+- [ ] 响应差异对比（diff）
 - [ ] 终端演示动图（见 good first issue）
 
 欢迎在 Issue 里提建议，或认领 **good first issue**。

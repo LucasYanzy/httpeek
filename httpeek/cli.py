@@ -3,11 +3,15 @@
 import json
 import os
 import sys
+import time
 
 from . import __version__
+from . import cookies as cookies_mod
+from . import history as history_mod
 from .ai import generate_request, AiUnavailable, DEFAULT_MODEL, OLLAMA_URL
 from .client import send_request, build_multipart
 from .collection import load_collection, run_collection
+from .exporter import to_curl
 from .importer import parse_curl
 from .mock_server import make_server
 from .pretty import (
@@ -46,7 +50,8 @@ def _parse_opts(args):
             "timeout": 10, "insecure": False, "output": None, "json_out": False,
             "verbose": False, "quiet": False, "only_headers": False,
             "only_body": False, "repeat": 1, "save": None, "form": [],
-            "_req_headers": {}}
+            "no_history": False, "save_cookies": None, "cookies": None,
+            "to_curl": False, "_req_headers": {}}
     i = 0
     while i < len(args):
         a = args[i]
@@ -89,6 +94,14 @@ def _parse_opts(args):
                 opts["form"].append((k.strip(), v.strip()))
         elif a == "--save":
             opts["save"] = args[i + 1]; i += 1
+        elif a == "--no-history":
+            opts["no_history"] = True
+        elif a == "--save-cookies":
+            opts["save_cookies"] = args[i + 1]; i += 1
+        elif a == "--cookies":
+            opts["cookies"] = args[i + 1]; i += 1
+        elif a == "--to-curl":
+            opts["to_curl"] = True
         elif a in ("-v", "--verbose"):
             opts["verbose"] = True
         elif a == "--only-headers":
@@ -144,6 +157,11 @@ def _print_response(res):
     _emit(res, {})
 
 
+def _host_of(url):
+    from urllib.parse import urlparse
+    return urlparse(url if "://" in url else "https://" + url).netloc
+
+
 def _to_entry(method, url, opts):
     """把一次请求转成集合条目，返回 (base_url, entry)。"""
     from urllib.parse import parse_qsl, urlparse
@@ -192,6 +210,7 @@ def _print_help():
   httpeek init [file.json]          生成一份示例集合
   httpeek import "<curl命令>" [--save f]  解析 curl 命令为请求/集合条目
   httpeek ai "<自然语言>" [--run]   用本机 Ollama 生成请求（可选直接发送）
+  httpeek history [序号] [--clear]  查看本地请求历史；带序号可重放
   httpeek version                   查看版本
 
 请求选项:
@@ -200,6 +219,10 @@ def _print_help():
   -q, --query k=v        查询参数，可重复
   -F, --form K=V         multipart 表单字段，可重复；K=@文件 上传文件
   --save 文件            把这次请求追加进集合文件（不存在则创建）
+  --to-curl              只导出等价的 curl 命令，不实际发送
+  --cookies 文件         带上文件里的 Cookie（会话保持，可配在集合的 "cookies" 字段）
+  --save-cookies 文件    把响应的 Set-Cookie 写回文件
+  --no-history           不把这条请求记录到本地历史
   --bearer TOKEN         Authorization: Bearer
   -t, --timeout 秒       超时（默认 10）
   -o, --output 文件      把响应体写入文件
@@ -228,6 +251,10 @@ def _print_help():
   httpeek get https://api.github.com/zen --save my.json
   httpeek import 'curl -X POST https://httpbin.org/post -d hello' --save my.json
   httpeek post https://httpbin.org/post -F "name=a" -F "f=@./a.txt"
+  httpeek get https://api.github.com/zen --to-curl
+  httpeek post https://httpbin.org/cookies/set -d "a=1" --save-cookies jar.json
+  httpeek get https://httpbin.org/cookies --cookies jar.json
+  httpeek history                 # 列出本地历史；httpeek history 2 重放第 2 条
   httpeek init demo.json && httpeek mock demo.json
   httpeek get http://127.0.0.1:8080/hello        # 配合上面的 mock
   httpeek get http://127.0.0.1:8080/users/42     # 路径参数 + 模板
@@ -263,6 +290,15 @@ def main(argv=None):
                 return 1
             opts["data"] = body
             opts["headers"]["Content-Type"] = ctype
+        if opts.get("cookies"):
+            jar = cookies_mod.load_jar(opts["cookies"])
+            ch = cookies_mod.header_for(jar, _host_of(url))
+            if ch:
+                opts["headers"]["Cookie"] = ch
+        if opts.get("to_curl"):
+            print(to_curl(method, url, headers=opts["headers"], body=opts["data"],
+                          bearer=opts["bearer"], form=opts["form"]))
+            return 0
         req_headers = dict(opts["headers"])
         if opts["bearer"]:
             req_headers["Authorization"] = f"Bearer {opts['bearer']}"
@@ -286,6 +322,13 @@ def main(argv=None):
             _save_to(opts["save"], base_url, entry)
             if not opts["quiet"]:
                 print(green("✓ ") + f"已保存到 {opts['save']}")
+        if opts.get("save_cookies"):
+            cookies_mod.update(opts["save_cookies"], last.get("set_cookies", []),
+                               _host_of(last["url"]))
+            if not opts["quiet"]:
+                print(green("✓ ") + f"Cookie 已写入 {opts['save_cookies']}")
+        if not opts.get("no_history"):
+            history_mod.append(method, last["url"], req_headers, opts["data"])
         if opts["json_out"]:
             out = {
                 "status": last["status"], "headers": last["headers"],
@@ -318,7 +361,19 @@ def main(argv=None):
             col = load_collection(argv[1])
         except Exception as e:
             print(red("✗"), str(e)); return 1
-        results = run_collection(col, timeout=opts["timeout"], insecure=opts["insecure"], strict=strict)
+        if opts.get("to_curl"):
+            base = col.get("base_url", "")
+            for req in col["requests"]:
+                path = req.get("path", "")
+                url = base.rstrip("/") + "/" + path.lstrip("/") if base and path else (path or base)
+                headers = dict(col.get("headers", {}) or {})
+                headers.update(req.get("headers", {}) or {})
+                data = req.get("body") if req.get("body") is not None else req.get("data")
+                print(to_curl(req.get("method", "GET"), url, headers=headers, body=data,
+                              bearer=col.get("bearer") or req.get("bearer")))
+            return 0
+        results = run_collection(col, timeout=opts["timeout"], insecure=opts["insecure"],
+                                 strict=strict, cookies=opts.get("cookies"))
         if strict and any(r.get("_assert_failed") for r in results):
             return 1
         return 0
@@ -417,6 +472,42 @@ def main(argv=None):
                 _print_response(res)
             except Exception as e:
                 print(red("✗"), str(e)); return 1
+        return 0
+
+    if head == "history":
+        rest = argv[1:]
+        if "--clear" in rest:
+            print(green("✓ ") + ("已清空历史" if history_mod.clear() else "没有历史记录"))
+            return 0
+        idx, limit = None, 20
+        i = 0
+        while i < len(rest):
+            a = rest[i]
+            if a == "--limit" and i + 1 < len(rest):
+                limit = int(rest[i + 1]); i += 1
+            elif a.isdigit():
+                idx = int(a)
+            i += 1
+        items = history_mod.load(limit)
+        if not items:
+            print(dim("暂无历史记录。发一个请求后就会出现在这里。"))
+            return 0
+        if idx is not None:
+            if idx < 1 or idx > len(items):
+                print(red(f"序号超出范围（1–{len(items)}）"))
+                return 2
+            e = items[idx - 1]
+            try:
+                res = send_request(e["method"], e["url"], headers=e.get("headers"),
+                                   data=e.get("body"), timeout=20)
+            except Exception as ex:
+                print(red("✗"), str(ex)); return 1
+            _emit(res, {})
+            return 0
+        for n, e in enumerate(items, 1):
+            t = time.strftime("%m-%d %H:%M", time.localtime(e.get("ts", 0)))
+            print(f"{dim(str(n).rjust(3))} {gray(t)} {bold(e['method'])} {e['url']}")
+        print(dim(f"\n共 {len(items)} 条（httpeek history <序号> 重放）"))
         return 0
 
     print(red(f"未知命令：{argv[0]}"))

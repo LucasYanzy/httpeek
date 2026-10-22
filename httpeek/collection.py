@@ -3,10 +3,16 @@
 import json
 import os
 import re
+from urllib.parse import urlparse
 
+from . import cookies as cookies_mod
 from .client import send_request
 from .errors import HttpPeekError
 from .pretty import bold, red, green, gray, status_color
+
+
+def _host(url):
+    return urlparse(url if "://" in url else "https://" + url).netloc
 
 # 环境变量占位符用 ${NAME}（与 Mock 模板的 {{...}} 区分，避免冲突）
 _ENV_RE = re.compile(r"\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}")
@@ -57,11 +63,13 @@ def _check_expect(req, res):
     return (len(fails) == 0), "; ".join(fails)
 
 
-def run_collection(collection, timeout=10, insecure=False, quiet=False, strict=False):
+def run_collection(collection, timeout=10, insecure=False, quiet=False, strict=False,
+                   cookies=None):
     """按顺序执行集合里的 requests，返回结果列表。"""
     base = collection.get("base_url", "")
     global_headers = collection.get("headers", {}) or {}
     bearer = collection.get("bearer")
+    cookies_path = cookies or collection.get("cookies")
     results = []
     failed = 0
     for req in collection["requests"]:
@@ -78,12 +86,19 @@ def run_collection(collection, timeout=10, insecure=False, quiet=False, strict=F
         name = req.get("name", f"{method} {url}")
         if not quiet:
             print(bold(f"▶ {name}"))
+        if cookies_path:
+            jar = cookies_mod.load_jar(cookies_path)
+            ch = cookies_mod.header_for(jar, _host(url))
+            if ch:
+                headers["Cookie"] = ch
         try:
             res = send_request(
                 method, url, headers=headers, data=data, query=query,
                 bearer=bearer or req.get("bearer"),
                 timeout=timeout, insecure=insecure,
             )
+            if cookies_path:
+                cookies_mod.update(cookies_path, res.get("set_cookies", []), _host(url))
             ok, why = _check_expect(req, res)
             if not ok:
                 failed += 1

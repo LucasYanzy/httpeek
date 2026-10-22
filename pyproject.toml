@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "httpeek"
-version = "0.2.0"
+version = "0.3.0"
 description = "终端 HTTP 客户端 + 内置 Mock 服务：零依赖、零账号、可离线"
 readme = "README.md"
 requires-python = ">=3.8"

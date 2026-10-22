@@ -32,6 +32,9 @@ class _H(BaseHTTPRequestHandler):
 class TestCli(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls._old_home = os.environ.get("HTTPEEK_HOME")
+        cls._home = tempfile.mkdtemp()
+        os.environ["HTTPEEK_HOME"] = cls._home  # 隔离历史，不写用户目录
         cls.srv = socketserver.TCPServer(("127.0.0.1", 0), _H)
         cls.port = cls.srv.server_address[1]
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
@@ -40,6 +43,10 @@ class TestCli(unittest.TestCase):
     def tearDownClass(cls):
         cls.srv.shutdown()
         cls.srv.server_close()
+        if cls._old_home is None:
+            os.environ.pop("HTTPEEK_HOME", None)
+        else:
+            os.environ["HTTPEEK_HOME"] = cls._old_home
 
     def _run(self, args):
         buf = io.StringIO()
@@ -133,6 +140,84 @@ class TestCli(unittest.TestCase):
         with open(p, encoding="utf-8") as f:
             col = json.load(f)
         self.assertEqual(col["requests"][0]["method"], "POST")
+
+    def test_multipart_builder(self):
+        from httpeek.client import build_multipart
+        d = tempfile.mkdtemp()
+        fp = os.path.join(d, "a.txt")
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write("hello-file")
+        body, ctype = build_multipart([("name", "a"), ("f", "@" + fp)])
+        self.assertIn("multipart/form-data; boundary=", ctype)
+        boundary = ctype.split("boundary=")[1]
+        txt = body.decode("utf-8", errors="replace")
+        self.assertIn('name="name"', txt)
+        self.assertIn('filename="a.txt"', txt)
+        self.assertIn("hello-file", txt)
+        self.assertIn(boundary, txt)
+
+
+    def test_to_curl_no_send(self):
+        rc, out = self._run(["get", _local_url(self.port), "--to-curl"])
+        self.assertEqual(rc, 0)
+        self.assertIn("curl", out)
+        self.assertNotIn("→", out)  # 未实际发送
+
+    def test_to_curl_post_body(self):
+        rc, out = self._run(["post", _local_url(self.port), "-d", '{"a":1}', "--to-curl"])
+        self.assertEqual(rc, 0)
+        self.assertIn("-X POST", out)
+
+    def test_history_record_and_list(self):
+        self._run(["get", _local_url(self.port, "/hist")])
+        rc, out = self._run(["history"])
+        self.assertEqual(rc, 0)
+        self.assertIn("/hist", out)
+
+    def test_history_replay(self):
+        self._run(["get", _local_url(self.port, "/replay")])
+        rc, out = self._run(["history", "1"])
+        self.assertEqual(rc, 0)
+        self.assertIn("200", out)
+
+    def test_history_clear(self):
+        self._run(["get", _local_url(self.port, "/c")])
+        rc, out = self._run(["history", "--clear"])
+        self.assertEqual(rc, 0)
+        self.assertIn("已清空", out)
+
+    def test_save_and_send_cookies(self):
+        from http.server import BaseHTTPRequestHandler
+
+        class C(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith("/set"):
+                    self.send_response(200)
+                    self.send_header("Set-Cookie", "sid=42; Path=/")
+                    self.end_headers()
+                    return
+                body = json.dumps({"cookie": self.headers.get("Cookie", "")}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, *a):
+                pass
+
+        srv = socketserver.TCPServer(("127.0.0.1", 0), C)
+        port = srv.server_address[1]
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            jar = os.path.join(tempfile.mkdtemp(), "jar.json")
+            rc, _ = self._run(["get", _local_url(port, "/set"), "--save-cookies", jar])
+            self.assertEqual(rc, 0)
+            self.assertTrue(os.path.exists(jar))
+            rc, out = self._run(["get", _local_url(port, "/check"), "--cookies", jar])
+            self.assertEqual(rc, 0)
+            self.assertIn("sid=42", out)
+        finally:
+            srv.shutdown(); srv.server_close()
 
     def test_multipart_builder(self):
         from httpeek.client import build_multipart

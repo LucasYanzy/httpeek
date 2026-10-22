@@ -87,17 +87,21 @@ def send_request(method="GET", url="", headers=None, data=None, query=None,
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
             status = resp.status
             reason = resp.reason
-            resp_headers = dict(resp.getheaders())
+            raw_headers = list(resp.getheaders())
+            resp_headers = dict(raw_headers)
             raw = resp.read()
     except urllib.error.HTTPError as e:
         status = e.code
         reason = e.reason
-        resp_headers = dict(e.headers.items()) if e.headers else {}
+        raw_headers = list(e.headers.items()) if e.headers else []
+        resp_headers = dict(raw_headers)
         raw = e.read()
     except urllib.error.URLError as e:
         raise HttpPeekError(f"无法连接到 {url}：{e.reason}")
     except TimeoutError:
         raise HttpPeekError(f"请求超时（>{timeout}s）：{url}")
+
+    set_cookies = [v for k, v in raw_headers if k.lower() == "set-cookie"]
 
     return {
         "method": method,
@@ -105,6 +109,7 @@ def send_request(method="GET", url="", headers=None, data=None, query=None,
         "status": status,
         "reason": reason or "",
         "headers": resp_headers,
+        "set_cookies": set_cookies,
         "body": raw,
         "elapsed": time.time() - start,
     }
