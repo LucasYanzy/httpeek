@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "httpeek"
 version = "0.3.0"
-description = "终端 HTTP 客户端 + 内置 Mock 服务：零依赖、零账号、可离线"
+description = "HTTP requests and local mocks from one terminal, with no runtime dependencies."
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
@@ -24,10 +24,10 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/httpeek/httpeek"
-Repository = "https://github.com/httpeek/httpeek"
-Documentation = "https://github.com/httpeek/httpeek#readme"
-Changelog = "https://github.com/httpeek/httpeek/releases"
+Homepage = "https://github.com/LucasYanzy/httpeek"
+Repository = "https://github.com/LucasYanzy/httpeek"
+Documentation = "https://github.com/LucasYanzy/httpeek#readme"
+Changelog = "https://github.com/LucasYanzy/httpeek/releases"
 
 [project.scripts]
 httpeek = "httpeek.cli:main"

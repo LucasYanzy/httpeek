@@ -1,0 +1,24 @@
+Local mock server (temporary port; synthetic responses)
+
+$ httpeek get http://127.0.0.1:53877/health --no-history
+→ 200 OK (27 ms) http://127.0.0.1:53877/health
+  Content-Type: application/json
+  Content-Length: 16
+
+{
+  "status": "ok"
+}
+
+$ httpeek post http://127.0.0.1:53877/items --no-history
+→ 201 Created (21 ms) http://127.0.0.1:53877/items
+  Content-Type: application/json
+  Content-Length: 27
+
+{
+  "id": 42,
+  "created": true
+}
+
+$ httpeek get http://127.0.0.1:53877/health --to-curl
+curl http://127.0.0.1:53877/health
+

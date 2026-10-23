@@ -9,3 +9,9 @@ env/
 *.log
 .httpeek/
 .DS_Store
+
+.env
+.env.*
+!.env.example
+*.pem
+*.key
