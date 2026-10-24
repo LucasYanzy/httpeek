@@ -2,7 +2,7 @@
 <h1 align="center">httpeek</h1>
 <p align="center"><strong>Send API requests and serve local mocks from one terminal.</strong></p>
 
-[![CI](https://github.com/LucasYanzy/httpeek/actions/workflows/ci.yml/badge.svg)](https://github.com/LucasYanzy/httpeek/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Version](https://img.shields.io/badge/source-v0.3.0-6b7280.svg)](https://github.com/LucasYanzy/httpeek/blob/main/pyproject.toml) ![Runtime](https://img.shields.io/badge/Python-3.8%2B-3776ab.svg) [![Stars](https://img.shields.io/github/stars/LucasYanzy/httpeek?style=flat)](https://github.com/LucasYanzy/httpeek/stargazers)
+[![CI](https://github.com/LucasXlab/httpeek/actions/workflows/ci.yml/badge.svg)](https://github.com/LucasXlab/httpeek/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Version](https://img.shields.io/badge/source-v0.3.0-6b7280.svg)](https://github.com/LucasXlab/httpeek/blob/main/pyproject.toml) ![Runtime](https://img.shields.io/badge/Python-3.8%2B-3776ab.svg) [![Stars](https://img.shields.io/github/stars/LucasYanzy/httpeek?style=flat)](https://github.com/LucasXlab/httpeek/stargazers)
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
@@ -22,7 +22,7 @@ Keep an API request collection and its local mock routes in one JSON file. Send 
 ## Quick start
 
 ```bash
-git clone https://github.com/LucasYanzy/httpeek.git && cd httpeek
+git clone https://github.com/LucasXlab/httpeek.git && cd httpeek
 python3 -m pip install .
 python3 scripts/demo.py
 ```
@@ -91,7 +91,7 @@ The demo uses a temporary fixture and does not inspect your personal repositorie
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md). Report reproducible problems in [Issues](https://github.com/LucasYanzy/httpeek/issues). Follow [SECURITY.md](SECURITY.md) for sensitive reports.
+Read [CONTRIBUTING.md](CONTRIBUTING.md). Report reproducible problems in [Issues](https://github.com/LucasXlab/httpeek/issues). Follow [SECURITY.md](SECURITY.md) for sensitive reports.
 
 ## License
 

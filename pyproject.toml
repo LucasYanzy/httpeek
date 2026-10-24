@@ -24,10 +24,10 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/LucasYanzy/httpeek"
-Repository = "https://github.com/LucasYanzy/httpeek"
-Documentation = "https://github.com/LucasYanzy/httpeek#readme"
-Changelog = "https://github.com/LucasYanzy/httpeek/releases"
+Homepage = "https://github.com/LucasXlab/httpeek"
+Repository = "https://github.com/LucasXlab/httpeek"
+Documentation = "https://github.com/LucasXlab/httpeek#readme"
+Changelog = "https://github.com/LucasXlab/httpeek/releases"
 
 [project.scripts]
 httpeek = "httpeek.cli:main"
